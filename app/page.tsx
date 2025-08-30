@@ -62,19 +62,26 @@ export default function LinkedInOutreachApp() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   
-  // Data states
+  // Data states - Initialize as empty arrays
   const [jobs, setJobs] = useState<Job[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [dataLoading, setDataLoading] = useState(false);
 
   // Check for stored token on mount
   useEffect(() => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-      setActiveTab("jobs");
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+        setActiveTab("jobs");
+      } catch (err) {
+        console.error('Error parsing stored user:', err);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
   }, []);
 
@@ -127,13 +134,17 @@ export default function LinkedInOutreachApp() {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    setJobs([]);
+    setConnections([]);
+    setAnalytics(null);
     setActiveTab("auth");
   };
 
-  // Fetch jobs
+  // Fetch jobs with error handling
   const fetchJobs = async () => {
     if (!token) return;
     
+    setDataLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/jobs`, {
         headers: {
@@ -143,17 +154,32 @@ export default function LinkedInOutreachApp() {
 
       if (response.ok) {
         const data = await response.json();
-        setJobs(data);
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setJobs(data);
+        } else if (data && Array.isArray(data.jobs)) {
+          setJobs(data.jobs);
+        } else {
+          console.error('Unexpected jobs data format:', data);
+          setJobs([]);
+        }
+      } else {
+        console.error('Failed to fetch jobs:', response.status);
+        setJobs([]);
       }
     } catch (err) {
       console.error('Error fetching jobs:', err);
+      setJobs([]);
+    } finally {
+      setDataLoading(false);
     }
   };
 
-  // Fetch connections
+  // Fetch connections with error handling
   const fetchConnections = async () => {
     if (!token) return;
     
+    setDataLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/connections`, {
         headers: {
@@ -163,17 +189,32 @@ export default function LinkedInOutreachApp() {
 
       if (response.ok) {
         const data = await response.json();
-        setConnections(data);
+        // Ensure data is an array
+        if (Array.isArray(data)) {
+          setConnections(data);
+        } else if (data && Array.isArray(data.connections)) {
+          setConnections(data.connections);
+        } else {
+          console.error('Unexpected connections data format:', data);
+          setConnections([]);
+        }
+      } else {
+        console.error('Failed to fetch connections:', response.status);
+        setConnections([]);
       }
     } catch (err) {
       console.error('Error fetching connections:', err);
+      setConnections([]);
+    } finally {
+      setDataLoading(false);
     }
   };
 
-  // Fetch analytics
+  // Fetch analytics with error handling
   const fetchAnalytics = async () => {
     if (!token) return;
     
+    setDataLoading(true);
     try {
       const response = await fetch(`${API_URL}/api/analytics`, {
         headers: {
@@ -184,21 +225,33 @@ export default function LinkedInOutreachApp() {
       if (response.ok) {
         const data = await response.json();
         setAnalytics(data);
+      } else {
+        console.error('Failed to fetch analytics:', response.status);
       }
     } catch (err) {
       console.error('Error fetching analytics:', err);
+    } finally {
+      setDataLoading(false);
     }
   };
 
   // Load data when tab changes
   useEffect(() => {
-    if (activeTab === "jobs") fetchJobs();
-    if (activeTab === "connections") fetchConnections();
-    if (activeTab === "analytics") fetchAnalytics();
+    if (!token) return;
+    
+    if (activeTab === "jobs") {
+      fetchJobs();
+    } else if (activeTab === "connections") {
+      fetchConnections();
+    } else if (activeTab === "analytics") {
+      fetchAnalytics();
+    }
   }, [activeTab, token]);
 
   // Add a new job manually
   const handleAddJob = async () => {
+    if (!token) return;
+
     const jobData = {
       title: "Senior Frontend Developer",
       company: "Example Corp",
@@ -221,7 +274,10 @@ export default function LinkedInOutreachApp() {
       });
 
       if (response.ok) {
-        fetchJobs(); // Refresh jobs list
+        await fetchJobs(); // Refresh jobs list
+      } else {
+        const error = await response.json();
+        console.error('Error adding job:', error);
       }
     } catch (err) {
       console.error('Error adding job:', err);
@@ -230,6 +286,8 @@ export default function LinkedInOutreachApp() {
 
   // Add a new connection
   const handleAddConnection = async () => {
+    if (!token) return;
+
     const connectionData = {
       name: "John Doe",
       title: "Engineering Manager",
@@ -250,7 +308,10 @@ export default function LinkedInOutreachApp() {
       });
 
       if (response.ok) {
-        fetchConnections(); // Refresh connections list
+        await fetchConnections(); // Refresh connections list
+      } else {
+        const error = await response.json();
+        console.error('Error adding connection:', error);
       }
     } catch (err) {
       console.error('Error adding connection:', err);
@@ -259,6 +320,8 @@ export default function LinkedInOutreachApp() {
 
   // Apply to a job
   const handleApplyToJob = async (jobId: string) => {
+    if (!token) return;
+
     try {
       const response = await fetch(`${API_URL}/api/jobs/${jobId}/apply`, {
         method: 'POST',
@@ -273,7 +336,10 @@ export default function LinkedInOutreachApp() {
       });
 
       if (response.ok) {
-        fetchJobs(); // Refresh to show updated status
+        await fetchJobs(); // Refresh to show updated status
+      } else {
+        const error = await response.json();
+        console.error('Error applying to job:', error);
       }
     } catch (err) {
       console.error('Error applying to job:', err);
@@ -360,13 +426,20 @@ export default function LinkedInOutreachApp() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Jobs</h2>
-        <Button onClick={handleAddJob}>
+        <Button onClick={handleAddJob} disabled={dataLoading}>
           <Plus className="h-4 w-4 mr-2" />
           Add Sample Job
         </Button>
       </div>
 
-      {jobs.length === 0 ? (
+      {dataLoading ? (
+        <Card>
+          <CardContent className="text-center py-10">
+            <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-gray-400" />
+            <p className="text-gray-500">Loading jobs...</p>
+          </CardContent>
+        </Card>
+      ) : jobs.length === 0 ? (
         <Card>
           <CardContent className="text-center py-10">
             <Briefcase className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -383,13 +456,15 @@ export default function LinkedInOutreachApp() {
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-gray-600 mb-4">{job.description}</p>
-                <div className="flex flex-wrap gap-2 mb-4">
-                  {job.requirements?.map((req, index) => (
-                    <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                      {req}
-                    </span>
-                  ))}
-                </div>
+                {job.requirements && Array.isArray(job.requirements) && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {job.requirements.map((req, index) => (
+                      <span key={index} className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        {req}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <p className="text-sm font-medium">{job.salary_range}</p>
               </CardContent>
               <CardFooter>
@@ -412,13 +487,20 @@ export default function LinkedInOutreachApp() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Connections</h2>
-        <Button onClick={handleAddConnection}>
+        <Button onClick={handleAddConnection} disabled={dataLoading}>
           <Plus className="h-4 w-4 mr-2" />
           Add Sample Connection
         </Button>
       </div>
 
-      {connections.length === 0 ? (
+      {dataLoading ? (
+        <Card>
+          <CardContent className="text-center py-10">
+            <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-gray-400" />
+            <p className="text-gray-500">Loading connections...</p>
+          </CardContent>
+        </Card>
+      ) : connections.length === 0 ? (
         <Card>
           <CardContent className="text-center py-10">
             <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
@@ -456,7 +538,14 @@ export default function LinkedInOutreachApp() {
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Analytics</h2>
       
-      {analytics ? (
+      {dataLoading ? (
+        <Card>
+          <CardContent className="text-center py-10">
+            <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin text-gray-400" />
+            <p className="text-gray-500">Loading analytics...</p>
+          </CardContent>
+        </Card>
+      ) : analytics ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Card>
             <CardHeader>
