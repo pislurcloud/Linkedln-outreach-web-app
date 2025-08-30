@@ -11,13 +11,51 @@ import { Search, Briefcase, Users, Mail, BarChart, FileText, Plus, Send, LogOut,
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
+// Type definitions
+interface User {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+interface Job {
+  id: string;
+  title: string;
+  company: string;
+  location: string;
+  description: string;
+  requirements: string[];
+  salary_range: string;
+  job_url: string;
+  application_deadline: string;
+  applied?: boolean;
+  created_at: string;
+}
+
+interface Connection {
+  id: string;
+  name: string;
+  title: string;
+  company: string;
+  linkedin_url: string;
+  email?: string;
+  notes?: string;
+  created_at: string;
+}
+
+interface Analytics {
+  total_applications: number;
+  total_connections: number;
+  response_rate: string;
+}
+
 export default function LinkedInOutreachApp() {
   const [activeTab, setActiveTab] = useState("auth");
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   
   // Form states
   const [email, setEmail] = useState("");
@@ -25,9 +63,9 @@ export default function LinkedInOutreachApp() {
   const [name, setName] = useState("");
   
   // Data states
-  const [jobs, setJobs] = useState([]);
-  const [connections, setConnections] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
 
   // Check for stored token on mount
   useEffect(() => {
@@ -41,7 +79,7 @@ export default function LinkedInOutreachApp() {
   }, []);
 
   // Auth functions
-  const handleAuth = async (e) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -78,7 +116,7 @@ export default function LinkedInOutreachApp() {
       setPassword("");
       setName("");
     } catch (err) {
-      setError(err.message);
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
@@ -220,7 +258,7 @@ export default function LinkedInOutreachApp() {
   };
 
   // Apply to a job
-  const handleApplyToJob = async (jobId) => {
+  const handleApplyToJob = async (jobId: string) => {
     try {
       const response = await fetch(`${API_URL}/api/jobs/${jobId}/apply`, {
         method: 'POST',
